@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Include database connection
-require_once '../includes/db.php';
+require_once './includes/db.php';
 
 // Get the request method
 $method = $_SERVER['REQUEST_METHOD'];
@@ -55,7 +55,76 @@ function validatePhone($phone) {
     return strlen($phone) >= 8 && strlen($phone) <= 15;
 }
 
-// GET: Retrieve applications (with optional filtering)
+// Helper function to format phone number for WhatsApp
+function formatPhoneForWhatsApp($phone) {
+    // Remove all non-digit characters
+    $phone = preg_replace('/[^0-9]/', '', $phone);
+    
+    // If number starts with 0, replace with 254
+    if (substr($phone, 0, 1) === '0') {
+        $phone = '254' . substr($phone, 1);
+    }
+    
+    // If number is 9 digits, assume it's Kenyan and add 254
+    if (strlen($phone) === 9) {
+        $phone = '254' . $phone;
+    }
+    
+    return $phone;
+}
+
+// Helper function to send WhatsApp request
+function sendWhatsAppRequest($phone, $applicationData) {
+    try {
+        // Format the phone number
+        $formattedPhone = formatPhoneForWhatsApp($phone);
+        
+        // Prepare message
+        $appType = $applicationData['application_type'] === 'startup' ? 'Startup' : 'Sponsor';
+        $message = "🚀 *GrowthSpire Application Received*\n\n";
+        $message .= "Hello " . $applicationData['full_name'] . ",\n\n";
+        $message .= "Thank you for submitting your " . $appType . " application!\n\n";
+        $message .= "*Application Details:*\n";
+        $message .= "• Type: " . $appType . "\n";
+        $message .= "• Company: " . $applicationData['company_name'] . "\n";
+        $message .= "• Reference: " . $applicationData['id'] . "\n\n";
+        $message .= "Our team will review your application within 5-7 business days.\n\n";
+        $message .= "Best regards,\n";
+        $message .= "GrowthSpire Team 🌟";
+        
+        // Prepare data for WhatsApp API
+        $whatsappData = [
+            'number' => $formattedPhone,
+            'message' => $message
+        ];
+        
+        // Log for debugging
+        error_log("Sending WhatsApp to: {$formattedPhone}, App ID: {$applicationData['id']}");
+        
+        // Send to WhatsApp API
+        $ch = curl_init('http://whatsapp.quickzingo.com/send');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($whatsappData));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3); // 3 second timeout
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        error_log("WhatsApp API Response - HTTP: {$httpCode}");
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("WhatsApp Error: " . $e->getMessage());
+        return false;
+    }
+}
+
+// GET: Retrieve applications
 if ($method === 'GET') {
     try {
         // Check if we're getting a specific application
@@ -63,11 +132,9 @@ if ($method === 'GET') {
             $id = sanitizeInput($_GET['id']);
             $stmt = $db->prepare("SELECT * FROM applications WHERE id = :id");
             $stmt->execute(['id' => $id]);
-            $application = $stmt->fetch();
+            $application = $stmt->fetch(PDO::FETCH_ASSOC);
             
             if ($application) {
-                // Mask sensitive information for security
-                unset($application['password_hash']); // Just in case
                 sendResponse(200, 'Application retrieved successfully', $application);
             } else {
                 sendResponse(404, 'Application not found');
@@ -90,7 +157,7 @@ if ($method === 'GET') {
             // Get total count
             $countStmt = $db->prepare("SELECT COUNT(*) as total FROM applications WHERE application_type = :type");
             $countStmt->execute(['type' => $type]);
-            $total = $countStmt->fetch()['total'];
+            $total = $countStmt->fetchColumn();
             
             // Get applications with pagination
             $stmt = $db->prepare("
@@ -104,12 +171,7 @@ if ($method === 'GET') {
             $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
             $stmt->execute();
             
-            $applications = $stmt->fetchAll();
-            
-            // Remove sensitive data
-            foreach ($applications as &$app) {
-                unset($app['password_hash']);
-            }
+            $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             sendResponse(200, 'Applications retrieved successfully', [
                 'applications' => $applications,
@@ -133,19 +195,14 @@ if ($method === 'GET') {
             
             $stmt = $db->prepare("SELECT * FROM applications WHERE status = :status ORDER BY created_at DESC");
             $stmt->execute(['status' => $status]);
-            $applications = $stmt->fetchAll();
-            
-            // Remove sensitive data
-            foreach ($applications as &$app) {
-                unset($app['password_hash']);
-            }
+            $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             sendResponse(200, 'Applications retrieved successfully', $applications);
         }
         
         // Get all applications (with pagination for admin)
         else {
-            // Check for admin authentication (you can implement JWT or session auth)
+            // Check for admin authentication
             $isAdmin = false; // Set to true if authenticated as admin
             
             if (!$isAdmin) {
@@ -159,7 +216,7 @@ if ($method === 'GET') {
             // Get total count
             $countStmt = $db->prepare("SELECT COUNT(*) as total FROM applications");
             $countStmt->execute();
-            $total = $countStmt->fetch()['total'];
+            $total = $countStmt->fetchColumn();
             
             // Get all applications
             $stmt = $db->prepare("
@@ -171,12 +228,7 @@ if ($method === 'GET') {
             $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
             $stmt->execute();
             
-            $applications = $stmt->fetchAll();
-            
-            // Remove sensitive data
-            foreach ($applications as &$app) {
-                unset($app['password_hash']);
-            }
+            $applications = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             sendResponse(200, 'Applications retrieved successfully', [
                 'applications' => $applications,
@@ -195,8 +247,12 @@ if ($method === 'GET') {
     }
 }
 
-// POST: Create a new application (for both startup and sponsor)
+// POST: Create a new application
 elseif ($method === 'POST') {
+    // Store phone number early for WhatsApp
+    $phoneForWhatsApp = null;
+    $applicationDataForWhatsApp = null;
+    
     try {
         // Get JSON input
         $input = json_decode(file_get_contents('php://input'), true);
@@ -205,12 +261,13 @@ elseif ($method === 'POST') {
             sendResponse(400, 'Invalid JSON input');
         }
         
-        // Validate required fields
-        $requiredFields = [
-            'application_type', 'full_name', 'email', 'phone', 
-            'company_name', 'message'
-        ];
+        // Store phone for WhatsApp (early storage)
+        if (isset($input['phone'])) {
+            $phoneForWhatsApp = $input['phone'];
+        }
         
+        // Validate required fields
+        $requiredFields = ['application_type', 'full_name', 'email', 'phone', 'company_name', 'message'];
         foreach ($requiredFields as $field) {
             if (empty($input[$field])) {
                 sendResponse(400, "Missing required field: $field");
@@ -246,41 +303,49 @@ elseif ($method === 'POST') {
             sendResponse(400, 'Invalid pitch deck URL');
         }
         
-        // Prepare data based on application type
-        $data = [
+        // Generate UUID for the application
+        $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
+        
+        // Prepare application data for response
+        $applicationData = [
+            'id' => $uuid,
             'application_type' => sanitizeInput($input['application_type']),
             'full_name' => sanitizeInput($input['full_name']),
             'email' => sanitizeInput($input['email']),
             'phone' => sanitizeInput($input['phone']),
             'company_name' => sanitizeInput($input['company_name']),
-            'message' => sanitizeInput($input['message']),
-            'linkedin_profile' => !empty($input['linkedin_profile']) ? sanitizeInput($input['linkedin_profile']) : null,
             'website_url' => !empty($input['website_url']) ? sanitizeInput($input['website_url']) : null,
+            'linkedin_profile' => !empty($input['linkedin_profile']) ? sanitizeInput($input['linkedin_profile']) : null,
+            'message' => sanitizeInput($input['message']),
+            'status' => 'pending',
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
         ];
         
-        // Handle startup-specific fields
+        // Add startup-specific fields
         if ($input['application_type'] === 'startup') {
-            $startupFields = [
-                'startup_stage' => sanitizeInput($input['startup_stage'] ?? ''),
-                'industry' => sanitizeInput($input['industry'] ?? ''),
-                'funding_needed_range' => sanitizeInput($input['funding_needed_range'] ?? ''),
-                'team_size' => sanitizeInput($input['team_size'] ?? ''),
-                'pitch_deck_url' => !empty($input['pitch_deck_url']) ? sanitizeInput($input['pitch_deck_url']) : null,
-            ];
-            
-            $data = array_merge($data, $startupFields);
+            $applicationData['startup_stage'] = !empty($input['startup_stage']) ? sanitizeInput($input['startup_stage']) : null;
+            $applicationData['industry'] = !empty($input['industry']) ? sanitizeInput($input['industry']) : null;
+            $applicationData['funding_needed_range'] = !empty($input['funding_needed_range']) ? sanitizeInput($input['funding_needed_range']) : null;
+            $applicationData['team_size'] = !empty($input['team_size']) ? sanitizeInput($input['team_size']) : null;
+            $applicationData['pitch_deck_url'] = !empty($input['pitch_deck_url']) ? sanitizeInput($input['pitch_deck_url']) : null;
         }
         
-        // Handle sponsor-specific fields
+        // Add sponsor-specific fields
         if ($input['application_type'] === 'sponsor') {
-            $sponsorFields = [
-                'investor_type' => sanitizeInput($input['investor_type'] ?? ''),
-                'investment_range' => sanitizeInput($input['investment_range'] ?? ''),
-                'focus_areas' => sanitizeInput($input['focus_areas'] ?? ''),
-            ];
-            
-            $data = array_merge($data, $sponsorFields);
+            $applicationData['investor_type'] = !empty($input['investor_type']) ? sanitizeInput($input['investor_type']) : null;
+            $applicationData['investment_range'] = !empty($input['investment_range']) ? sanitizeInput($input['investment_range']) : null;
+            $applicationData['focus_areas'] = !empty($input['focus_areas']) ? sanitizeInput($input['focus_areas']) : null;
         }
+        
+        // Store complete application data for WhatsApp
+        $applicationDataForWhatsApp = $applicationData;
         
         // Check if email already has a pending application
         $checkStmt = $db->prepare("
@@ -288,41 +353,81 @@ elseif ($method === 'POST') {
             WHERE email = :email AND status = 'pending' 
             AND created_at > DATE_SUB(NOW(), INTERVAL 30 DAY)
         ");
-        $checkStmt->execute(['email' => $data['email']]);
+        $checkStmt->execute(['email' => $applicationData['email']]);
         
         if ($checkStmt->fetch()) {
             sendResponse(400, 'You already have a pending application. Please wait 30 days before submitting another.');
         }
         
-        // Insert into database
-        $columns = implode(', ', array_keys($data));
-        $placeholders = ':' . implode(', :', array_keys($data));
+        // Prepare SQL statement
+        $sql = "INSERT INTO applications (
+            id, application_type, full_name, email, phone, company_name,
+            website_url, linkedin_profile, message, status,
+            startup_stage, industry, funding_needed_range, team_size, pitch_deck_url,
+            investor_type, investment_range, focus_areas,
+            created_at, updated_at
+        ) VALUES (
+            :id, :application_type, :full_name, :email, :phone, :company_name,
+            :website_url, :linkedin_profile, :message, :status,
+            :startup_stage, :industry, :funding_needed_range, :team_size, :pitch_deck_url,
+            :investor_type, :investment_range, :focus_areas,
+            :created_at, :updated_at
+        )";
         
-        $sql = "INSERT INTO applications ($columns) VALUES ($placeholders)";
         $stmt = $db->prepare($sql);
         
-        if ($stmt->execute($data)) {
-            $applicationId = $db->lastInsertId();
+        // Execute the insert
+        $success = $stmt->execute([
+            ':id' => $applicationData['id'],
+            ':application_type' => $applicationData['application_type'],
+            ':full_name' => $applicationData['full_name'],
+            ':email' => $applicationData['email'],
+            ':phone' => $applicationData['phone'],
+            ':company_name' => $applicationData['company_name'],
+            ':website_url' => $applicationData['website_url'],
+            ':linkedin_profile' => $applicationData['linkedin_profile'],
+            ':message' => $applicationData['message'],
+            ':status' => $applicationData['status'],
+            ':startup_stage' => $applicationData['startup_stage'] ?? null,
+            ':industry' => $applicationData['industry'] ?? null,
+            ':funding_needed_range' => $applicationData['funding_needed_range'] ?? null,
+            ':team_size' => $applicationData['team_size'] ?? null,
+            ':pitch_deck_url' => $applicationData['pitch_deck_url'] ?? null,
+            ':investor_type' => $applicationData['investor_type'] ?? null,
+            ':investment_range' => $applicationData['investment_range'] ?? null,
+            ':focus_areas' => $applicationData['focus_areas'] ?? null,
+            ':created_at' => $applicationData['created_at'],
+            ':updated_at' => $applicationData['updated_at']
+        ]);
+        
+        if ($success) {
+            // Database insert successful - send response FIRST
+            sendResponse(201, 'Application submitted successfully', $applicationData);
             
-            // Get the created application
-            $stmt = $db->prepare("SELECT * FROM applications WHERE id = :id");
-            $stmt->execute(['id' => $applicationId]);
-            $newApplication = $stmt->fetch();
+            // AFTER sending response, send WhatsApp notification
+            // This happens in background and doesn't block the response
+            if ($phoneForWhatsApp && $applicationDataForWhatsApp) {
+                try {
+                    // Send WhatsApp notification
+                    sendWhatsAppRequest($phoneForWhatsApp, $applicationDataForWhatsApp);
+                } catch (Exception $e) {
+                    // Log but don't throw error - WhatsApp failure shouldn't affect application
+                    error_log("Background WhatsApp failed: " . $e->getMessage());
+                }
+            }
             
-            // Remove sensitive data
-            unset($newApplication['password_hash']);
+            // Exit after sending response and starting background process
+            exit();
             
-            // Send notification email (optional)
-            sendNotificationEmail($newApplication);
-            
-            sendResponse(201, 'Application submitted successfully', $newApplication);
         } else {
-            sendResponse(500, 'Failed to submit application');
+            $errorInfo = $stmt->errorInfo();
+            error_log("Database insert failed: " . json_encode($errorInfo));
+            sendResponse(500, 'Failed to save application to database');
         }
         
     } catch (Exception $e) {
         error_log("POST Error: " . $e->getMessage());
-        sendResponse(500, 'Failed to submit application');
+        sendResponse(500, 'Server error: ' . $e->getMessage());
     }
 }
 
@@ -384,10 +489,7 @@ elseif ($method === 'PUT') {
             // Get updated application
             $stmt = $db->prepare("SELECT * FROM applications WHERE id = :id");
             $stmt->execute(['id' => $id]);
-            $updatedApplication = $stmt->fetch();
-            
-            // Remove sensitive data
-            unset($updatedApplication['password_hash']);
+            $updatedApplication = $stmt->fetch(PDO::FETCH_ASSOC);
             
             sendResponse(200, 'Application updated successfully', $updatedApplication);
         } else {
@@ -426,8 +528,6 @@ elseif ($method === 'DELETE') {
             sendResponse(404, 'Application not found');
         }
         
-        // Soft delete (update status to deleted) or hard delete
-        // For GDPR compliance, you might want to anonymize instead
         $stmt = $db->prepare("DELETE FROM applications WHERE id = :id");
         
         if ($stmt->execute(['id' => $id])) {
@@ -445,53 +545,5 @@ elseif ($method === 'DELETE') {
 // Method not allowed
 else {
     sendResponse(405, 'Method not allowed');
-}
-
-// Helper function to send notification email (optional)
-function sendNotificationEmail($application) {
-    try {
-        // Email to applicant
-        $toApplicant = $application['email'];
-        $subject = "GrowthSpire Application Received";
-        
-        $message = "Dear " . $application['full_name'] . ",\n\n";
-        $message .= "Thank you for submitting your " . $application['application_type'] . " application to GrowthSpire.\n\n";
-        $message .= "We have received your application and our team will review it within 5-7 business days.\n\n";
-        $message .= "Application Details:\n";
-        $message .= "- Type: " . ucfirst($application['application_type']) . "\n";
-        $message .= "- Company: " . $application['company_name'] . "\n";
-        $message .= "- Reference ID: " . $application['id'] . "\n\n";
-        $message .= "If you have any questions, please don't hesitate to contact us.\n\n";
-        $message .= "Best regards,\n";
-        $message .= "The GrowthSpire Team\n";
-        $message .= "https://growthspire.co.ke";
-        
-        // Email headers
-        $headers = "From: no-reply@growthspire.co.ke\r\n";
-        $headers .= "Reply-To: info@growthspire.co.ke\r\n";
-        $headers .= "X-Mailer: PHP/" . phpversion();
-        
-        // Send email (you can enable this in production)
-        // mail($toApplicant, $subject, $message, $headers);
-        
-        // Also send notification to admin
-        $toAdmin = "admin@growthspire.co.ke";
-        $adminSubject = "New GrowthSpire Application: " . $application['application_type'];
-        
-        $adminMessage = "A new " . $application['application_type'] . " application has been submitted:\n\n";
-        $adminMessage .= "Name: " . $application['full_name'] . "\n";
-        $adminMessage .= "Email: " . $application['email'] . "\n";
-        $adminMessage .= "Phone: " . $application['phone'] . "\n";
-        $adminMessage .= "Company: " . $application['company_name'] . "\n";
-        $adminMessage .= "Application ID: " . $application['id'] . "\n\n";
-        $adminMessage .= "Login to the admin panel to review: https://admin.growthspire.co.ke";
-        
-        // mail($toAdmin, $adminSubject, $adminMessage, $headers);
-        
-        return true;
-    } catch (Exception $e) {
-        error_log("Email Error: " . $e->getMessage());
-        return false;
-    }
 }
 ?>
