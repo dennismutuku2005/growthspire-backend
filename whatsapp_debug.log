@@ -1,0 +1,144 @@
+
+
+========== [2026-01-10 21:17:30] NEW WHATSAPP ATTEMPT ==========
+📱 Incoming Phone: +254707819850
+📄 Application Data: {
+    "id": "21ff17cd-8a68-4f7b-af59-6462fd3e002c",
+    "application_type": "sponsor",
+    "full_name": "anna",
+    "email": "annamuoki10@gmail.com",
+    "phone": "+254707819850",
+    "company_name": "tech-solutionsKE",
+    "website_url": "http:\/\/localhost:3000\/apply",
+    "linkedin_profile": null,
+    "message": "WERTYUIOLKJHGFDSAZXCFVGBNVC",
+    "status": "pending",
+    "created_at": "2026-01-10 21:17:30",
+    "updated_at": "2026-01-10 21:17:30",
+    "investor_type": "development",
+    "investment_range": "5m-25m",
+    "focus_areas": "AI"
+}
+🔧 Phone Formatting:
+   Original: +254707819850
+   Formatted: 254707819850
+✉️ WhatsApp Payload:
+{
+    "number": "254707819850",
+    "message": "\ud83d\ude80 *GrowthSpire Application Received*\n\nHello anna,\n\nThank you for submitting your Sponsor application!\n\n*Application Details:*\n\u2022 Type: Sponsor\n\u2022 Company: tech-solutionsKE\n\u2022 Reference: 21ff17cd-8a68-4f7b-af59-6462fd3e002c\n\nOur team will review your application within 5-7 business days.\n\nBest regards,\nGrowthSpire Team \ud83c\udf1f"
+}
+📝 Message Preview: 🚀 *GrowthSpire Application Received*
+
+Hello anna,
+
+Thank you for submitting your Sponsor application!
+
+*Application Details:*
+• Type: Sponsor
+• Company: tech-solutionsKE
+• Reference: 21ff17cd...
+🌐 API Endpoint: http://whatsapp.quickzingo.com/send
+📤 Sending request...
+
+📥 WhatsApp API Response:
+   HTTP Status Code: 200
+   cURL Error Code: 0
+   cURL Error Message: 
+   Total Time: 0.743088s
+   Response Headers:
+HTTP/1.1 200 OK
+Connection: Keep-Alive
+Keep-Alive: timeout=5, max=100
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Content-Type: application/json; charset=utf-8
+ETag: W/"99-MlF00IEdPUAHmFRFfe7YTn/OUYY"
+Content-Length: 153
+Date: Sat, 10 Jan 2026 20:17:29 GMT
+Server: LiteSpeed
+
+
+   Response Body: {"status":"success","message":"Message sent","to":"254707819850@s.whatsapp.net","duplicate":false,"cooldown":null,"timestamp":"2026-01-10T20:17:29.621Z"}
+✅ API Response Data: {
+    "status": "success",
+    "message": "Message sent",
+    "to": "254707819850@s.whatsapp.net",
+    "duplicate": false,
+    "cooldown": null,
+    "timestamp": "2026-01-10T20:17:29.621Z"
+}
+🎉 SUCCESS: WhatsApp request sent successfully!
+✅ FINAL RESULT: SUCCESS
+
+
+========== [2026-01-10 21:20:01] NEW WHATSAPP ATTEMPT ==========
+📱 Incoming Phone: +254793527494
+📄 Application Data: {
+    "id": "c3578a20-efe1-422f-ad13-635acc7fba92",
+    "application_type": "startup",
+    "full_name": "DENNIS",
+    "email": "dennismutuku2005@gmail.com",
+    "phone": "+254793527494",
+    "company_name": "alx",
+    "website_url": "http:\/\/localhost:3000\/apply",
+    "linkedin_profile": null,
+    "message": "jjk,m ,",
+    "status": "pending",
+    "created_at": "2026-01-10 21:20:01",
+    "updated_at": "2026-01-10 21:20:01",
+    "startup_stage": "pre-seed",
+    "industry": "other",
+    "funding_needed_range": "15m-50m",
+    "team_size": "6-10",
+    "pitch_deck_url": null
+}
+🔧 Phone Formatting:
+   Original: +254793527494
+   Formatted: 254793527494
+✉️ WhatsApp Payload:
+{
+    "number": "254793527494",
+    "message": "\ud83d\ude80 *GrowthSpire Application Received*\n\nHello DENNIS,\n\nThank you for submitting your Startup application!\n\n*Application Details:*\n\u2022 Type: Startup\n\u2022 Company: alx\n\u2022 Reference: c3578a20-efe1-422f-ad13-635acc7fba92\n\nOur team will review your application within 5-7 business days.\n\nBest regards,\nGrowthSpire Team \ud83c\udf1f"
+}
+📝 Message Preview: 🚀 *GrowthSpire Application Received*
+
+Hello DENNIS,
+
+Thank you for submitting your Startup application!
+
+*Application Details:*
+• Type: Startup
+• Company: alx
+• Reference: c3578a20-efe1-422f-...
+🌐 API Endpoint: http://whatsapp.quickzingo.com/send
+📤 Sending request...
+
+📥 WhatsApp API Response:
+   HTTP Status Code: 200
+   cURL Error Code: 0
+   cURL Error Message: 
+   Total Time: 1.16345s
+   Response Headers:
+HTTP/1.1 200 OK
+Connection: Keep-Alive
+Keep-Alive: timeout=5, max=100
+X-Powered-By: Express
+Access-Control-Allow-Origin: *
+Content-Type: application/json; charset=utf-8
+ETag: W/"99-a5pkPbnAS7wk72Z4d7qO9MGjLEQ"
+Content-Length: 153
+Date: Sat, 10 Jan 2026 20:20:00 GMT
+Server: LiteSpeed
+
+
+   Response Body: {"status":"success","message":"Message sent","to":"254793527494@s.whatsapp.net","duplicate":false,"cooldown":null,"timestamp":"2026-01-10T20:20:00.588Z"}
+✅ API Response Data: {
+    "status": "success",
+    "message": "Message sent",
+    "to": "254793527494@s.whatsapp.net",
+    "duplicate": false,
+    "cooldown": null,
+    "timestamp": "2026-01-10T20:20:00.588Z"
+}
+🎉 SUCCESS: WhatsApp request sent successfully!
+✅ FINAL RESULT: SUCCESS

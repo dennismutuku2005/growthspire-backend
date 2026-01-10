@@ -55,8 +55,153 @@ function validatePhone($phone) {
     return strlen($phone) >= 8 && strlen($phone) <= 15;
 }
 
-// Helper function to format phone number for WhatsApp
+// Helper function to send WhatsApp request with detailed logging
+function sendWhatsAppRequest($phone, $applicationData) {
+    $logFile = __DIR__ . '/whatsapp_debug.log';
+    $timestamp = date('Y-m-d H:i:s');
+    
+    try {
+        // Start logging
+        $logMessage = "\n\n========== [{$timestamp}] NEW WHATSAPP ATTEMPT ==========\n";
+        
+        // Log incoming parameters
+        $logMessage .= "📱 Incoming Phone: {$phone}\n";
+        $logMessage .= "📄 Application Data: " . json_encode($applicationData, JSON_PRETTY_PRINT) . "\n";
+        
+        // Format the phone number
+        $originalPhone = $phone;
+        $formattedPhone = formatPhoneForWhatsApp($phone);
+        $logMessage .= "🔧 Phone Formatting:\n";
+        $logMessage .= "   Original: {$originalPhone}\n";
+        $logMessage .= "   Formatted: {$formattedPhone}\n";
+        
+        // Validate phone number
+        if (empty($formattedPhone) || strlen($formattedPhone) < 10) {
+            $logMessage .= "❌ ERROR: Invalid formatted phone number: {$formattedPhone}\n";
+            file_put_contents($logFile, $logMessage, FILE_APPEND);
+            return false;
+        }
+        
+        // Prepare message
+        $appType = isset($applicationData['application_type']) && $applicationData['application_type'] === 'startup' ? 'Startup' : 'Sponsor';
+        $message = "🚀 *GrowthSpire Application Received*\n\n";
+        $message .= "Hello " . ($applicationData['full_name'] ?? 'Applicant') . ",\n\n";
+        $message .= "Thank you for submitting your " . $appType . " application!\n\n";
+        $message .= "*Application Details:*\n";
+        $message .= "• Type: " . $appType . "\n";
+        $message .= "• Company: " . ($applicationData['company_name'] ?? 'N/A') . "\n";
+        $message .= "• Reference: " . ($applicationData['id'] ?? 'N/A') . "\n\n";
+        $message .= "Our team will review your application within 5-7 business days.\n\n";
+        $message .= "Best regards,\n";
+        $message .= "GrowthSpire Team 🌟";
+        
+        // Prepare data for WhatsApp API
+        $whatsappData = [
+            'number' => $formattedPhone,
+            'message' => $message
+        ];
+        
+        $logMessage .= "✉️ WhatsApp Payload:\n";
+        $logMessage .= json_encode($whatsappData, JSON_PRETTY_PRINT) . "\n";
+        
+        // Log message preview (first 200 chars)
+        $messagePreview = substr($message, 0, 200) . (strlen($message) > 200 ? '...' : '');
+        $logMessage .= "📝 Message Preview: {$messagePreview}\n";
+        
+        // Send to WhatsApp API
+        $apiUrl = 'http://whatsapp.quickzingo.com/send';
+        $logMessage .= "🌐 API Endpoint: {$apiUrl}\n";
+        
+        $ch = curl_init($apiUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($whatsappData),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json'
+            ],
+            CURLOPT_TIMEOUT => 5,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HEADER => true, // Include headers in response
+        ]);
+        
+        $logMessage .= "📤 Sending request...\n";
+        file_put_contents($logFile, $logMessage, FILE_APPEND);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errorNo = curl_errno($ch);
+        $errorMsg = curl_error($ch);
+        $totalTime = curl_getinfo($ch, CURLINFO_TOTAL_TIME);
+        
+        // Parse response
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $headers = substr($response, 0, $headerSize);
+        $body = substr($response, $headerSize);
+        
+        curl_close($ch);
+        
+        // Continue logging response
+        $logMessage = "\n📥 WhatsApp API Response:\n";
+        $logMessage .= "   HTTP Status Code: {$httpCode}\n";
+        $logMessage .= "   cURL Error Code: {$errorNo}\n";
+        $logMessage .= "   cURL Error Message: {$errorMsg}\n";
+        $logMessage .= "   Total Time: {$totalTime}s\n";
+        $logMessage .= "   Response Headers:\n{$headers}\n";
+        $logMessage .= "   Response Body: {$body}\n";
+        
+        // Check for success
+        if ($errorNo !== 0) {
+            $logMessage .= "❌ cURL ERROR: {$errorMsg} (Code: {$errorNo})\n";
+            $success = false;
+        } elseif ($httpCode >= 200 && $httpCode < 300) {
+            // Parse JSON response
+            $responseData = json_decode($body, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $logMessage .= "✅ API Response Data: " . json_encode($responseData, JSON_PRETTY_PRINT) . "\n";
+                $logMessage .= "🎉 SUCCESS: WhatsApp request sent successfully!\n";
+            } else {
+                $logMessage .= "⚠️  Warning: Invalid JSON response: {$body}\n";
+                $logMessage .= "JSON Error: " . json_last_error_msg() . "\n";
+            }
+            $success = true;
+        } else {
+            $logMessage .= "❌ HTTP ERROR: Status code {$httpCode}\n";
+            $logMessage .= "Response: {$body}\n";
+            $success = false;
+        }
+        
+        // Log final result
+        $logMessage .= $success ? "✅ FINAL RESULT: SUCCESS\n" : "❌ FINAL RESULT: FAILED\n";
+        
+        file_put_contents($logFile, $logMessage, FILE_APPEND);
+        
+        return $success;
+        
+    } catch (Exception $e) {
+        // Log exception
+        $errorLog = "\n🔥 EXCEPTION CAUGHT:\n";
+        $errorLog .= "   Message: " . $e->getMessage() . "\n";
+        $errorLog .= "   File: " . $e->getFile() . "\n";
+        $errorLog .= "   Line: " . $e->getLine() . "\n";
+        $errorLog .= "   Trace: " . $e->getTraceAsString() . "\n";
+        
+        file_put_contents($logFile, $errorLog, FILE_APPEND);
+        
+        return false;
+    }
+}
+
+// Also update the formatPhoneForWhatsApp function to log issues
 function formatPhoneForWhatsApp($phone) {
+    $logFile = __DIR__ . '/whatsapp_debug.log';
+    
+    // Log original input
+    $original = $phone;
+    
     // Remove all non-digit characters
     $phone = preg_replace('/[^0-9]/', '', $phone);
     
@@ -70,58 +215,22 @@ function formatPhoneForWhatsApp($phone) {
         $phone = '254' . $phone;
     }
     
-    return $phone;
-}
-
-// Helper function to send WhatsApp request
-function sendWhatsAppRequest($phone, $applicationData) {
-    try {
-        // Format the phone number
-        $formattedPhone = formatPhoneForWhatsApp($phone);
-        
-        // Prepare message
-        $appType = $applicationData['application_type'] === 'startup' ? 'Startup' : 'Sponsor';
-        $message = "🚀 *GrowthSpire Application Received*\n\n";
-        $message .= "Hello " . $applicationData['full_name'] . ",\n\n";
-        $message .= "Thank you for submitting your " . $appType . " application!\n\n";
-        $message .= "*Application Details:*\n";
-        $message .= "• Type: " . $appType . "\n";
-        $message .= "• Company: " . $applicationData['company_name'] . "\n";
-        $message .= "• Reference: " . $applicationData['id'] . "\n\n";
-        $message .= "Our team will review your application within 5-7 business days.\n\n";
-        $message .= "Best regards,\n";
-        $message .= "GrowthSpire Team 🌟";
-        
-        // Prepare data for WhatsApp API
-        $whatsappData = [
-            'number' => $formattedPhone,
-            'message' => $message
-        ];
-        
-        // Log for debugging
-        error_log("Sending WhatsApp to: {$formattedPhone}, App ID: {$applicationData['id']}");
-        
-        // Send to WhatsApp API
-        $ch = curl_init('http://whatsapp.quickzingo.com/send');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($whatsappData));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json'
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 3); // 3 second timeout
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        error_log("WhatsApp API Response - HTTP: {$httpCode}");
-        
-        return true;
-    } catch (Exception $e) {
-        error_log("WhatsApp Error: " . $e->getMessage());
-        return false;
+    // If number starts with +254, remove the +
+    if (substr($phone, 0, 4) === '+254') {
+        $phone = substr($phone, 1);
     }
+    
+    // Validate Kenyan phone number format
+    if (!preg_match('/^254[17]\d{8}$/', $phone)) {
+        $logMessage = "⚠️ Phone Number Format Warning:\n";
+        $logMessage .= "   Original: {$original}\n";
+        $logMessage .= "   Processed: {$phone}\n";
+        $logMessage .= "   Length: " . strlen($phone) . "\n";
+        $logMessage .= "   Pattern: " . (preg_match('/^254[17]\d{8}$/', $phone) ? 'Valid' : 'Invalid') . "\n";
+        file_put_contents($logFile, $logMessage, FILE_APPEND);
+    }
+    
+    return $phone;
 }
 
 // GET: Retrieve applications
@@ -401,23 +510,27 @@ elseif ($method === 'POST') {
         ]);
         
         if ($success) {
-            // Database insert successful - send response FIRST
-            sendResponse(201, 'Application submitted successfully', $applicationData);
-            
-            // AFTER sending response, send WhatsApp notification
-            // This happens in background and doesn't block the response
+            // ✅ FIRST: Send WhatsApp notification BEFORE sending response
+            $whatsappSent = false;
             if ($phoneForWhatsApp && $applicationDataForWhatsApp) {
                 try {
-                    // Send WhatsApp notification
-                    sendWhatsAppRequest($phoneForWhatsApp, $applicationDataForWhatsApp);
+                    $whatsappSent = sendWhatsAppRequest($phoneForWhatsApp, $applicationDataForWhatsApp);
+                    // Add WhatsApp status to response
+                    $applicationData['whatsapp_sent'] = $whatsappSent;
+                    $applicationData['whatsapp_status'] = $whatsappSent ? 'sent' : 'failed';
                 } catch (Exception $e) {
-                    // Log but don't throw error - WhatsApp failure shouldn't affect application
-                    error_log("Background WhatsApp failed: " . $e->getMessage());
+                    // Log but don't fail
+                    error_log("WhatsApp notification error: " . $e->getMessage());
+                    $applicationData['whatsapp_sent'] = false;
+                    $applicationData['whatsapp_status'] = 'error';
+                    $applicationData['whatsapp_error'] = $e->getMessage();
                 }
             }
             
-            // Exit after sending response and starting background process
-            exit();
+            // ✅ SECOND: Send response to client
+            sendResponse(201, 'Application submitted successfully', $applicationData);
+            
+            // No exit() here - let the script end naturally
             
         } else {
             $errorInfo = $stmt->errorInfo();
